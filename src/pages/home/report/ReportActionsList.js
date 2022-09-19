@@ -32,6 +32,18 @@ const propTypes = {
 
         /** Whether there is an outstanding amount in IOU */
         hasOutstandingIOU: PropTypes.bool,
+
+        /** Participants for the report */
+        participants: PropTypes.arrayOf(PropTypes.string).isRequired,
+
+        /** Status for the report */
+        statusNum: PropTypes.number.isRequired,
+
+        /** State for the report */
+        stateNum: PropTypes.number.isRequired,
+
+        /** Chat type for the report */
+        chatType: PropTypes.string.isRequired,
     }).isRequired,
 
     /** Sorted actions prepared for display */
@@ -139,6 +151,10 @@ class ReportActionsList extends React.Component {
         return (
             <ReportActionItem
                 reportID={this.props.report.reportID}
+                participants={this.props.report.participants}
+                statusNum={this.props.report.statusNum}
+                stateNum={this.props.report.stateNum}
+                chatType={this.props.report.chatType}
                 action={item.action}
                 displayAsGroup={ReportActionsUtils.isConsecutiveActionMadeByPreviousActor(this.props.sortedReportActions, index)}
                 shouldDisplayNewIndicator={shouldDisplayNewIndicator}

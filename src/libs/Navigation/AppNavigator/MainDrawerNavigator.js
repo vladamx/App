@@ -55,7 +55,7 @@ const getInitialReportScreenParams = (reports, ignoreDefaultRooms, policies) => 
     return {reportID: String(reportID)};
 };
 
-const MainDrawerNavigator = (props) => {
+const MainDrawerNavigator = React.memo((props) => {
     const initialParams = getInitialReportScreenParams(props.reports, !Permissions.canUseDefaultRooms(props.betas), props.policies);
 
     // Wait until reports are fetched and there is a reportID in initialParams
@@ -79,7 +79,11 @@ const MainDrawerNavigator = (props) => {
             isMainScreen
         />
     );
-};
+}, (prevProps, nextProps) => {
+    const initialPrevParams = getInitialReportScreenParams(prevProps.reports, !Permissions.canUseDefaultRooms(prevProps.betas), prevProps.policies);
+    const initialNextParams = getInitialReportScreenParams(nextProps.reports, !Permissions.canUseDefaultRooms(nextProps.betas), nextProps.policies);
+    return initialPrevParams.reportID === initialNextParams.reportID;
+});
 
 MainDrawerNavigator.propTypes = propTypes;
 MainDrawerNavigator.defaultProps = defaultProps;

@@ -2,8 +2,10 @@ import lodashGet from 'lodash/get';
 import React from 'react';
 import {InteractionManager, View} from 'react-native';
 import PropTypes from 'prop-types';
+import {withOnyx} from 'react-native-onyx';
 import _ from 'underscore';
 import ExpensiMark from 'expensify-common/lib/ExpensiMark';
+import ONYXKEYS from '../../../ONYXKEYS';
 import reportActionPropTypes from './reportActionPropTypes';
 import styles from '../../../styles/styles';
 import Composer from '../../../components/Composer';
@@ -253,6 +255,11 @@ ReportActionItemMessageEdit.defaultProps = defaultProps;
 export default compose(
     withLocalize,
     withWindowDimensions,
+    withOnyx({
+        report: {
+            key: ({reportID}) => `${ONYXKEYS.COLLECTION.REPORT}${reportID}`,
+        },
+    }),
 )(React.forwardRef((props, ref) => (
     /* eslint-disable-next-line react/jsx-props-no-spreading */
     <ReportActionItemMessageEdit {...props} forwardedRef={ref} />

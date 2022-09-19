@@ -2,6 +2,7 @@ import lodashGet from 'lodash/get';
 import React from 'react';
 import PropTypes from 'prop-types';
 import {withOnyx} from 'react-native-onyx';
+import lodashFindLast from 'lodash/findLast';
 import CONST from '../CONST';
 import Banner from './Banner';
 import withLocalize, {withLocalizePropTypes} from './withLocalize';
@@ -11,26 +12,23 @@ import ONYXKEYS from '../ONYXKEYS';
 import * as ReportUtils from '../libs/ReportUtils';
 
 const propTypes = {
-    /** The reason this report was archived */
-    reportClosedAction: PropTypes.shape({
-        /** Message attached to the report closed action */
-        originalMessage: PropTypes.shape({
-            /** The reason the report was closed */
-            reason: PropTypes.string.isRequired,
-
-            /** (For accountMerged reason only), the email of the previous owner of this report. */
-            oldLogin: PropTypes.string,
-
-            /** (For accountMerged reason only), the email of the account the previous owner was merged into */
-            newLogin: PropTypes.string,
+    /** Navigation route context info provided by react navigation */
+    route: PropTypes.shape({
+        /** Route specific parameters used on this screen */
+        params: PropTypes.shape({
+            /** The ID of the report this screen should display */
+            reportID: PropTypes.string,
         }).isRequired,
-    }),
-
-    /** The archived report */
-    report: PropTypes.shape({
-        /** The policy this report is attached to */
-        policyID: PropTypes.string,
     }).isRequired,
+
+    /** The policy this report is attached to */
+    policyID: PropTypes.string.isRequired,
+
+    /** The policy this report is attached to */
+    ownerEmail: PropTypes.string.isRequired,
+
+    /** The policy this report is attached to */
+    oldPolicyName: PropTypes.string.isRequired,
 
     /** Personal details of all users */
     personalDetails: PropTypes.objectOf(personalDetailsPropType).isRequired,
@@ -45,21 +43,21 @@ const propTypes = {
 };
 
 const defaultProps = {
-    reportClosedAction: {
+};
+
+const ArchivedReportFooter = React.memo((props) => {
+    const archiveReason = lodashGet(props.reportClosedAction, 'originalMessage.reason', CONST.REPORT.ARCHIVE_REASON.DEFAULT);
+    let displayName = lodashGet(props.personalDetails, `${props.ownerEmail}.displayName`, props.ownerEmail);
+    const reportClosedAction = lodashFindLast(props.reportActions, action => action.actionName === CONST.REPORT.ACTIONS.TYPE.CLOSED) || {
         originalMessage: {
             reason: CONST.REPORT.ARCHIVE_REASON.DEFAULT,
         },
-    },
-};
-
-const ArchivedReportFooter = (props) => {
-    const archiveReason = lodashGet(props.reportClosedAction, 'originalMessage.reason', CONST.REPORT.ARCHIVE_REASON.DEFAULT);
-    let displayName = lodashGet(props.personalDetails, `${props.report.ownerEmail}.displayName`, props.report.ownerEmail);
+    };
 
     let oldDisplayName;
     if (archiveReason === CONST.REPORT.ARCHIVE_REASON.ACCOUNT_MERGED) {
-        const newLogin = props.reportClosedAction.originalMessage.newLogin;
-        const oldLogin = props.reportClosedAction.originalMessage.oldLogin;
+        const newLogin = reportClosedAction.originalMessage.newLogin;
+        const oldLogin = reportClosedAction.originalMessage.oldLogin;
         displayName = lodashGet(props.personalDetails, `${newLogin}.displayName`, newLogin);
         oldDisplayName = lodashGet(props.personalDetails, `${oldLogin}.displayName`, oldLogin);
     }
@@ -69,12 +67,12 @@ const ArchivedReportFooter = (props) => {
             text={props.translate(`reportArchiveReasons.${archiveReason}`, {
                 displayName: `<strong>${displayName}</strong>`,
                 oldDisplayName: `<strong>${oldDisplayName}</strong>`,
-                policyName: `<strong>${ReportUtils.getPolicyName(props.report, props.policies)}</strong>`,
+                policyName: `<strong>${ReportUtils.getPolicyName({policyID: props.policyID, oldPolicyName: props.oldPolicyName}, props.policies)}</strong>`,
             })}
             shouldRenderHTML={archiveReason !== CONST.REPORT.ARCHIVE_REASON.DEFAULT}
         />
     );
-};
+});
 
 ArchivedReportFooter.propTypes = propTypes;
 ArchivedReportFooter.defaultProps = defaultProps;
@@ -83,6 +81,10 @@ ArchivedReportFooter.displayName = 'ArchivedReportFooter';
 export default compose(
     withLocalize,
     withOnyx({
+        reportActions: {
+            key: ({route}) => `${ONYXKEYS.COLLECTION.REPORT_ACTIONS}${route.params.reportID.toString()}`,
+            canEvict: false,
+        },
         personalDetails: {
             key: ONYXKEYS.PERSONAL_DETAILS,
         },

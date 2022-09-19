@@ -38,6 +38,18 @@ const propTypes = {
     /** The ID of the report this action is on. */
     reportID: PropTypes.number.isRequired,
 
+    /** Participants for the report */
+    participants: PropTypes.arrayOf(PropTypes.string).isRequired,
+
+    /** Status for the report */
+    statusNum: PropTypes.number.isRequired,
+
+    /** State for the report */
+    stateNum: PropTypes.number.isRequired,
+
+    /** Chat type for the report */
+    chatType: PropTypes.string.isRequired,
+
     /** All the data of the action item */
     action: PropTypes.shape(reportActionPropTypes).isRequired,
 
@@ -81,6 +93,10 @@ class ReportActionItem extends Component {
     shouldComponentUpdate(nextProps, nextState) {
         return this.props.displayAsGroup !== nextProps.displayAsGroup
             || this.props.draftMessage !== nextProps.draftMessage
+            || this.props.participants.length !== nextProps.participants.length
+            || this.props.stateNum !== nextProps.stateNum
+            || this.props.statusNum !== nextProps.statusNum
+            || this.props.chatType !== nextProps.chatType
             || this.props.isMostRecentIOUReportAction !== nextProps.isMostRecentIOUReportAction
             || this.props.hasOutstandingIOU !== nextProps.hasOutstandingIOU
             || this.props.shouldDisplayNewIndicator !== nextProps.shouldDisplayNewIndicator
@@ -94,7 +110,9 @@ class ReportActionItem extends Component {
         }
 
         // Only focus the input when user edits a message, skip it for existing drafts being edited of the report.
-        this.textInput.focus();
+        if (this.textInput) {
+            this.textInput.focus();
+        }
     }
 
     /**
@@ -153,10 +171,9 @@ class ReportActionItem extends Component {
                         reportID={this.props.reportID}
                         index={this.props.index}
                         ref={el => this.textInput = el}
-                        report={this.props.report}
                         shouldDisableEmojiPicker={
-                            (ReportUtils.chatIncludesConcierge(this.props.report) && User.isBlockedFromConcierge(this.props.blockedFromConcierge))
-                            || ReportUtils.isArchivedRoom(this.props.report)
+                            (ReportUtils.chatIncludesConcierge({participants: this.props.participants}) && User.isBlockedFromConcierge(this.props.blockedFromConcierge))
+                            || ReportUtils.isArchivedRoom({chatType: this.props.chatType, stateNum: this.props.stateNum, statusNum: this.props.statusNum})
                         }
                     />
                 );
@@ -190,9 +207,9 @@ class ReportActionItem extends Component {
                                 <OfflineWithFeedback
                                     onClose={() => {
                                         if (this.props.action.pendingAction === CONST.RED_BRICK_ROAD_PENDING_ACTION.ADD) {
-                                            ReportActions.deleteOptimisticReportAction(this.props.report.reportID, this.props.action.sequenceNumber);
+                                            ReportActions.deleteOptimisticReportAction(this.props.reportID, this.props.action.sequenceNumber);
                                         } else {
-                                            ReportActions.clearReportActionErrors(this.props.report.reportID, this.props.action.sequenceNumber);
+                                            ReportActions.clearReportActionErrors(this.props.reportID, this.props.action.sequenceNumber);
                                         }
                                     }}
                                     pendingAction={this.props.action.pendingAction}
@@ -249,9 +266,6 @@ export default compose(
     withOnyx({
         blockedFromConcierge: {
             key: ONYXKEYS.NVP_BLOCKED_FROM_CONCIERGE,
-        },
-        report: {
-            key: ({reportID}) => `${ONYXKEYS.COLLECTION.REPORT}${reportID}`,
         },
     }),
 )(ReportActionItem);

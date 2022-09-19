@@ -6,12 +6,14 @@ import {
 import PropTypes from 'prop-types';
 import _ from 'underscore';
 import lodashGet from 'lodash/get';
+import {withOnyx} from 'react-native-onyx';
 import * as Report from '../../../libs/actions/Report';
 import reportActionPropTypes from './reportActionPropTypes';
 import * as CollectionUtils from '../../../libs/CollectionUtils';
 import Visibility from '../../../libs/Visibility';
 import Timing from '../../../libs/actions/Timing';
 import CONST from '../../../CONST';
+import ONYXKEYS from '../../../ONYXKEYS';
 import compose from '../../../libs/compose';
 import withWindowDimensions, {windowDimensionsPropTypes} from '../../../components/withWindowDimensions';
 import withDrawerState, {withDrawerPropTypes} from '../../../components/withDrawerState';
@@ -30,6 +32,7 @@ import CopySelectionHelper from '../../../components/CopySelectionHelper';
 import EmojiPicker from '../../../components/EmojiPicker/EmojiPicker';
 import * as ReportActionsUtils from '../../../libs/ReportActionsUtils';
 import * as ReportUtils from '../../../libs/ReportUtils';
+import getReportID from '../getReportID';
 
 const propTypes = {
     /* Onyx Props */
@@ -59,7 +62,7 @@ const propTypes = {
     }),
 
     /** Whether the composer is full size */
-    isComposerFullSize: PropTypes.bool.isRequired,
+    isComposerFullSize: PropTypes.bool,
 
     /** Information about the network */
     network: networkPropTypes.isRequired,
@@ -72,6 +75,7 @@ const propTypes = {
 const defaultProps = {
     reportActions: {},
     session: {},
+    isComposerFullSize: false,
 };
 
 class ReportActionsView extends React.Component {
@@ -386,4 +390,15 @@ export default compose(
     withDrawerState,
     withLocalize,
     withNetwork(),
+    withOnyx({
+        report: {
+            key: ({route}) => `${ONYXKEYS.COLLECTION.REPORT}${getReportID(route)}`,
+        },
+        isComposerFullSize: {
+            key: ({route}) => `${ONYXKEYS.COLLECTION.REPORT_IS_COMPOSER_FULL_SIZE}${getReportID(route)}`,
+        },
+        session: {
+            key: ONYXKEYS.SESSION,
+        },
+    }),
 )(ReportActionsView);

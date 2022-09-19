@@ -27,6 +27,7 @@ import * as ReportUtils from '../../../libs/ReportUtils';
 import withCurrentUserPersonalDetails from '../../../components/withCurrentUserPersonalDetails';
 import Timing from '../../../libs/actions/Timing';
 import reportActionPropTypes from '../report/reportActionPropTypes';
+import withDrawerState from '../../../components/withDrawerState';
 
 const propTypes = {
     /** Toggles the navigation menu open and closed */
@@ -66,6 +67,9 @@ const propTypes = {
         avatar: PropTypes.string,
     }),
 
+    /** Is the report view covered by the drawer */
+    isDrawerOpen: PropTypes.bool.isRequired,
+
     /** Currently viewed reportID */
     currentlyViewedReportID: PropTypes.string,
 
@@ -93,6 +97,10 @@ class SidebarLinks extends React.Component {
     constructor(props) {
         super(props);
         this.getRecentReportsOptionListItems = memoizeOne(this.getRecentReportsOptionListItems.bind(this));
+    }
+
+    shouldComponentUpdate() {
+        return this.props.isDrawerOpen;
     }
 
     /**
@@ -214,6 +222,7 @@ SidebarLinks.defaultProps = defaultProps;
 export default compose(
     withLocalize,
     withCurrentUserPersonalDetails,
+    withDrawerState,
     withOnyx({
         reports: {
             key: ONYXKEYS.COLLECTION.REPORT,

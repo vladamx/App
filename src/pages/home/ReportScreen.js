@@ -1,10 +1,9 @@
 import React from 'react';
 import {withOnyx} from 'react-native-onyx';
 import PropTypes from 'prop-types';
-import {Keyboard, Platform, View} from 'react-native';
+import {Platform, View} from 'react-native';
 import lodashGet from 'lodash/get';
 import _ from 'underscore';
-import lodashFindLast from 'lodash/findLast';
 import styles from '../../styles/styles';
 import ScreenWrapper from '../../components/ScreenWrapper';
 import HeaderView from './HeaderView';
@@ -14,18 +13,11 @@ import * as Report from '../../libs/actions/Report';
 import ONYXKEYS from '../../ONYXKEYS';
 import Permissions from '../../libs/Permissions';
 import * as ReportUtils from '../../libs/ReportUtils';
-import ReportActionsView from './report/ReportActionsView';
-import ReportActionCompose from './report/ReportActionCompose';
-import SwipeableView from '../../components/SwipeableView';
 import CONST from '../../CONST';
-import ReportActionsSkeletonView from '../../components/ReportActionsSkeletonView';
-import reportActionPropTypes from './report/reportActionPropTypes';
-import ArchivedReportFooter from '../../components/ArchivedReportFooter';
 import toggleReportActionComposeView from '../../libs/toggleReportActionComposeView';
 import addViewportResizeListener from '../../libs/VisualViewport';
-import {withNetwork} from '../../components/OnyxProvider';
-import compose from '../../libs/compose';
-import networkPropTypes from '../../components/networkPropTypes';
+import ReportActions from './ReportActions';
+import ReportBottom from './ReportBottom';
 
 const propTypes = {
     /** Navigation route context info provided by react navigation */
@@ -47,24 +39,33 @@ const propTypes = {
 
     /** The report currently being looked at */
     report: PropTypes.shape({
-        /** The largest sequenceNumber on this report */
-        maxSequenceNumber: PropTypes.number,
-
-        /** Whether there is an outstanding amount in IOU */
-        hasOutstandingIOU: PropTypes.bool,
-
-        /** Flag to check if the report actions data are loading */
-        isLoadingReportActions: PropTypes.bool,
-
         /** ID for the report */
         reportID: PropTypes.number,
+
+        /** Status for the report */
+        statusNum: PropTypes.number.isRequired,
+
+        /** Status for the report */
+        isLoadingReportActions: PropTypes.bool.isRequired,
+
+        /** State for the report */
+        stateNum: PropTypes.number.isRequired,
+
+        /** Chat type for the report */
+        chatType: PropTypes.string,
+
+        /** Policy ID for the report */
+        policyID: PropTypes.string,
+
+        /** Policy name for the report */
+        policyName: PropTypes.string,
+
+        /** Participants for the report */
+        participants: PropTypes.arrayOf(PropTypes.string),
+
+        /** Owner email for the report */
+        ownerEmail: PropTypes.string,
     }),
-
-    /** Array of report actions for this report */
-    reportActions: PropTypes.objectOf(PropTypes.shape(reportActionPropTypes)),
-
-    /** Whether the composer is full size */
-    isComposerFullSize: PropTypes.bool,
 
     /** Beta features list */
     betas: PropTypes.arrayOf(PropTypes.string),
@@ -78,8 +79,6 @@ const propTypes = {
         type: PropTypes.string,
     })),
 
-    /** Information about the network */
-    network: networkPropTypes.isRequired,
 };
 
 const defaultProps = {
@@ -87,13 +86,10 @@ const defaultProps = {
     session: {
         shouldShowComposeInput: true,
     },
-    reportActions: {},
     report: {
         maxSequenceNumber: 0,
-        hasOutstandingIOU: false,
         isLoadingReportActions: false,
     },
-    isComposerFullSize: false,
     betas: [],
     policies: {},
 };
@@ -114,7 +110,6 @@ class ReportScreen extends React.Component {
     constructor(props) {
         super(props);
 
-        this.onSubmitComment = this.onSubmitComment.bind(this);
         this.updateViewportOffsetTop = this.updateViewportOffsetTop.bind(this);
         this.removeViewportResizeListener = () => {};
 
@@ -129,6 +124,22 @@ class ReportScreen extends React.Component {
         this.removeViewportResizeListener = addViewportResizeListener(this.updateViewportOffsetTop);
     }
 
+    shouldComponentUpdate(prevProps, nextState) {
+        // Its important to be explicit about when ReportScreen re-renders because it is high in the hierarchy
+        return prevProps.report.chatType !== this.props.report.chatType
+              || prevProps.report.policyID !== this.props.report.policyID
+              || prevProps.report.reportID !== this.props.report.reportID
+              || prevProps.report.statusNum !== this.props.report.statusNum
+              || prevProps.report.stateNum !== this.props.report.stateNum
+              || prevProps.isSidebarLoaded !== this.props.isSidebarLoaded
+              || prevProps.report.policyName !== this.props.report.policyName
+              || prevProps.report.isLoadingReportActions !== this.props.report.isLoadingReportActions
+              || prevProps.report.ownerEmail !== this.props.report.ownerEmail
+              || prevProps.report.participants.length !== this.props.report.participants.length
+              || nextState.skeletonViewContainerHeight !== this.state.skeletonViewContainerHeight
+              || nextState.viewportOffsetTop !== this.state.viewportOffsetTop;
+    }
+
     componentDidUpdate(prevProps) {
         if (this.props.route.params.reportID === prevProps.route.params.reportID) {
             return;
@@ -140,27 +151,8 @@ class ReportScreen extends React.Component {
         this.removeViewportResizeListener();
     }
 
-    /**
-     * @param {String} text
-     */
-    onSubmitComment(text) {
-        Report.addComment(getReportID(this.props.route), text);
-    }
-
     setChatFooterStyles(isOffline) {
         return {...styles.chatFooter, minHeight: !isOffline ? CONST.CHAT_FOOTER_MIN_HEIGHT : 0};
-    }
-
-    /**
-     * When reports change there's a brief time content is not ready to be displayed
-     * It Should show the loader if it's the first time we are opening the report
-     *
-     * @returns {Boolean}
-     */
-    shouldShowLoader() {
-        // This means there are no reportActions at all to display, but it is still in the process of loading the next set of actions.
-        const isLoadingInitialReportActions = _.isEmpty(this.props.reportActions) && this.props.report.isLoadingReportActions;
-        return !getReportID(this.props.route) || isLoadingInitialReportActions || !this.props.report.reportID;
     }
 
     /**
@@ -217,11 +209,6 @@ class ReportScreen extends React.Component {
 
         const reportID = getReportID(this.props.route);
 
-        const isArchivedRoom = ReportUtils.isArchivedRoom(this.props.report);
-        let reportClosedAction;
-        if (isArchivedRoom) {
-            reportClosedAction = lodashFindLast(this.props.reportActions, action => action.actionName === CONST.REPORT.ACTIONS.TYPE.CLOSED);
-        }
         return (
             <ScreenWrapper
                 style={[styles.appContent, styles.flex1, {marginTop: this.state.viewportOffsetTop}]}
@@ -237,43 +224,21 @@ class ReportScreen extends React.Component {
                     style={[styles.flex1, styles.justifyContentEnd, styles.overflowHidden]}
                     onLayout={event => this.setState({skeletonViewContainerHeight: event.nativeEvent.layout.height})}
                 >
-                    {this.shouldShowLoader()
-                        ? (
-                            <ReportActionsSkeletonView
-                                containerHeight={this.state.skeletonViewContainerHeight}
-                            />
-                        )
-                        : (
-                            <ReportActionsView
-                                reportActions={this.props.reportActions}
-                                report={this.props.report}
-                                session={this.props.session}
-                                isComposerFullSize={this.props.isComposerFullSize}
-                            />
-                        )}
-                    {(isArchivedRoom || this.props.session.shouldShowComposeInput) && (
-                        <View style={[this.setChatFooterStyles(this.props.network.isOffline), this.props.isComposerFullSize && styles.chatFooterFullCompose]}>
-                            {
-                                isArchivedRoom
-                                    ? (
-                                        <ArchivedReportFooter
-                                            reportClosedAction={reportClosedAction}
-                                            report={this.props.report}
-                                        />
-                                    ) : (
-                                        <SwipeableView onSwipeDown={Keyboard.dismiss}>
-                                            <ReportActionCompose
-                                                onSubmit={this.onSubmitComment}
-                                                reportID={reportID}
-                                                reportActions={this.props.reportActions}
-                                                report={this.props.report}
-                                                isComposerFullSize={this.props.isComposerFullSize}
-                                            />
-                                        </SwipeableView>
-                                    )
-                            }
-                        </View>
-                    )}
+                    <ReportActions
+                        route={this.props.route}
+                        isLoadingReportActions={this.props.report.isLoadingReportActions}
+                        skeletonViewContainerHeight={this.state.skeletonViewContainerHeight}
+                    />
+                    <ReportBottom
+                        chatType={this.props.report.chatType}
+                        policyID={this.props.report.policyID}
+                        participants={this.props.report.participants}
+                        stateNum={this.props.report.stateNum}
+                        statusNum={this.props.report.statusNum}
+                        ownerEmail={this.props.report.ownerEmail}
+                        policyName={this.props.report.policyName}
+                        route={this.props.route}
+                    />
                 </View>
             </ScreenWrapper>
         );
@@ -283,30 +248,21 @@ class ReportScreen extends React.Component {
 ReportScreen.propTypes = propTypes;
 ReportScreen.defaultProps = defaultProps;
 
-export default compose(
-    withNetwork(),
-    withOnyx({
-        isSidebarLoaded: {
-            key: ONYXKEYS.IS_SIDEBAR_LOADED,
-        },
-        session: {
-            key: ONYXKEYS.SESSION,
-        },
-        reportActions: {
-            key: ({route}) => `${ONYXKEYS.COLLECTION.REPORT_ACTIONS}${getReportID(route)}`,
-            canEvict: false,
-        },
-        report: {
-            key: ({route}) => `${ONYXKEYS.COLLECTION.REPORT}${getReportID(route)}`,
-        },
-        isComposerFullSize: {
-            key: ({route}) => `${ONYXKEYS.COLLECTION.REPORT_IS_COMPOSER_FULL_SIZE}${getReportID(route)}`,
-        },
-        betas: {
-            key: ONYXKEYS.BETAS,
-        },
-        policies: {
-            key: ONYXKEYS.COLLECTION.POLICY,
-        },
-    }),
-)(ReportScreen);
+export default
+withOnyx({
+    isSidebarLoaded: {
+        key: ONYXKEYS.IS_SIDEBAR_LOADED,
+    },
+    session: {
+        key: ONYXKEYS.SESSION,
+    },
+    report: {
+        key: ({route}) => `${ONYXKEYS.COLLECTION.REPORT}${getReportID(route)}`,
+    },
+    betas: {
+        key: ONYXKEYS.BETAS,
+    },
+    policies: {
+        key: ONYXKEYS.COLLECTION.POLICY,
+    },
+})(ReportScreen);

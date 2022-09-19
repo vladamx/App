@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {PureComponent} from 'react';
 import PropTypes from 'prop-types';
 import {
     View,
@@ -68,12 +68,8 @@ const propTypes = {
     /** Personal details of all the users */
     personalDetails: PropTypes.objectOf(participantPropTypes),
 
-    /** The report currently being looked at */
-    report: PropTypes.shape({
-
-        /** participants associated with current report */
-        participants: PropTypes.arrayOf(PropTypes.string),
-    }),
+    /** participants associated with current report */
+    participants: PropTypes.arrayOf(PropTypes.string),
 
     /** Array of report actions for this report */
     reportActions: PropTypes.objectOf(PropTypes.shape(reportActionPropTypes)),
@@ -111,7 +107,7 @@ const defaultProps = {
     ...withCurrentUserPersonalDetailsDefaultProps,
 };
 
-class ReportActionCompose extends React.Component {
+class ReportActionCompose extends PureComponent {
     constructor(props) {
         super(props);
 
@@ -131,19 +127,20 @@ class ReportActionCompose extends React.Component {
         this.addAttachment = this.addAttachment.bind(this);
 
         this.comment = props.comment;
+        this.currentSelection = {
+            selection: {
+                start: props.comment.length,
+                end: props.comment.length,
+            },
+        };
         this.shouldFocusInputOnScreenFocus = canFocusInputOnScreenFocus();
 
         this.state = {
             isFocused: this.shouldFocusInputOnScreenFocus,
             isFullComposerAvailable: props.isComposerFullSize,
-            textInputShouldClear: false,
             isCommentEmpty: props.comment.length === 0,
             isMenuVisible: false,
-            selection: {
-                start: props.comment.length,
-                end: props.comment.length,
-            },
-            maxLines: props.isSmallScreenWidth ? CONST.COMPOSER.MAX_LINES_SMALL_SCREEN : CONST.COMPOSER.MAX_LINES,
+            selection: this.currentSelection,
         };
     }
 
@@ -155,7 +152,6 @@ class ReportActionCompose extends React.Component {
 
             this.focus(false);
         });
-        this.setMaxLines();
         this.updateComment(this.comment);
     }
 
@@ -173,13 +169,9 @@ class ReportActionCompose extends React.Component {
             this.focus();
         }
 
-        if (this.props.isComposerFullSize !== prevProps.isComposerFullSize) {
-            this.setMaxLines();
-        }
-
         // As the report IDs change, make sure to update the composer comment as we need to make sure
         // we do not show incorrect data in there (ie. draft of message from other report).
-        if (this.props.report.reportID === prevProps.report.reportID) {
+        if (this.props.reportID === prevProps.reportID) {
             return;
         }
 
@@ -191,7 +183,7 @@ class ReportActionCompose extends React.Component {
     }
 
     onSelectionChange(e) {
-        this.setState({selection: e.nativeEvent.selection});
+        this.currentSelection = {selection: e.nativeEvent.selection};
     }
 
     /**
@@ -205,15 +197,6 @@ class ReportActionCompose extends React.Component {
 
     setIsFullComposerAvailable(isFullComposerAvailable) {
         this.setState({isFullComposerAvailable});
-    }
-
-    /**
-     * Updates the should clear state of the composer
-     *
-     * @param {Boolean} shouldClear
-     */
-    setTextInputShouldClear(shouldClear) {
-        this.setState({textInputShouldClear: shouldClear});
     }
 
     /**
@@ -242,7 +225,7 @@ class ReportActionCompose extends React.Component {
      * @return {String}
      */
     getInputPlaceholder() {
-        if (ReportUtils.chatIncludesConcierge(this.props.report) && User.isBlockedFromConcierge(this.props.blockedFromConcierge)) {
+        if (ReportUtils.chatIncludesConcierge({participants: this.props.participants}) && User.isBlockedFromConcierge(this.props.blockedFromConcierge)) {
             return this.props.translate('reportActionCompose.blockedFromConcierge');
         }
 
@@ -293,33 +276,21 @@ class ReportActionCompose extends React.Component {
     }
 
     /**
-     * Set the maximum number of lines for the composer
-     */
-    setMaxLines() {
-        let maxLines = this.props.isSmallScreenWidth ? CONST.COMPOSER.MAX_LINES_SMALL_SCREEN : CONST.COMPOSER.MAX_LINES;
-        if (this.props.isComposerFullSize) {
-            maxLines = CONST.COMPOSER.MAX_LINES_FULL;
-        }
-        this.setState({maxLines});
-    }
-
-    /**
      * Callback for the emoji picker to add whatever emoji is chosen into the main input
      *
      * @param {String} emoji
      */
     addEmojiToTextBox(emoji) {
-        const newComment = this.comment.slice(0, this.state.selection.start)
-            + emoji + this.comment.slice(this.state.selection.end, this.comment.length);
+        const newComment = this.comment.slice(0, this.currentSelection.start)
+            + emoji + this.comment.slice(this.currentSelection.end, this.comment.length);
         this.textInput.setNativeProps({
             text: newComment,
         });
-        this.setState(prevState => ({
-            selection: {
-                start: prevState.selection.start + emoji.length,
-                end: prevState.selection.start + emoji.length,
-            },
-        }));
+        this.selection = {
+            start: this.selection.start + emoji.length,
+            end: this.selection.start + emoji.length,
+        };
+        this.setState({selection: this.selection});
         this.updateComment(newComment);
     }
 
@@ -373,9 +344,16 @@ class ReportActionCompose extends React.Component {
      */
     updateComment(newComment) {
         this.textInput.setNativeProps({text: newComment});
-        this.setState({
-            isCommentEmpty: !!newComment.match(/^(\s|`)*$/),
-        });
+        const newCommentIsEmpty = newComment.match(/^(\s|`)*$/);
+        if (newCommentIsEmpty && !this.state.isCommentEmpty) {
+            this.setState({
+                isCommentEmpty: true,
+            });
+        } else if (!newCommentIsEmpty && this.state.isCommentEmpty) {
+            this.setState({
+                isCommentEmpty: false,
+            });
+        }
 
         // Indicate that draft has been created.
         if (this.comment.length === 0 && newComment.length !== 0) {
@@ -430,7 +408,7 @@ class ReportActionCompose extends React.Component {
      * @returns {String}
      */
     prepareCommentAndResetComposer() {
-        const trimmedComment = this.comment.trim();
+        const trimmedComment = this.prepareComment(this.comment);
 
         // Don't submit empty comments or comments that exceed the character limit
         if (this.state.isCommentEmpty || trimmedComment.length > CONST.MAX_COMMENT_LENGTH) {
@@ -438,13 +416,19 @@ class ReportActionCompose extends React.Component {
         }
 
         this.updateComment('');
-        this.setTextInputShouldClear(true);
         if (this.props.isComposerFullSize) {
             Report.setIsComposerFullSize(this.props.reportID, false);
         }
-        this.setState({isFullComposerAvailable: false});
 
         return trimmedComment;
+    }
+
+    /**
+     * @param {String} comment
+     * @returns {String}
+     */
+    prepareComment(comment) {
+        return comment.trim();
     }
 
     /**
@@ -453,7 +437,6 @@ class ReportActionCompose extends React.Component {
     addAttachment(file) {
         const comment = this.prepareCommentAndResetComposer();
         Report.addAttachment(this.props.reportID, file, comment);
-        this.setTextInputShouldClear(false);
     }
 
     /**
@@ -465,13 +448,23 @@ class ReportActionCompose extends React.Component {
         if (e) {
             e.preventDefault();
         }
-
-        const comment = this.prepareCommentAndResetComposer();
+        const comment = this.prepareComment(this.comment);
         if (!comment) {
             return;
         }
 
-        this.props.onSubmit(comment);
+        // Prioritize reset of composer to make sure we properly clear the view
+        // Read https://reactnative.dev/docs/timers
+        setImmediate(() => {
+            this.prepareCommentAndResetComposer();
+        });
+
+        // Deprioritize expensive submit by putting the work at the end of the queue
+        // Notice that we do not put any timing constant for setTimeout which would make this a hack
+        // We are using setTimeout just to put work at the end of the queue.
+        setTimeout(() => {
+            this.props.onSubmit(comment);
+        });
     }
 
     render() {
@@ -480,18 +473,22 @@ class ReportActionCompose extends React.Component {
             return null;
         }
 
-        const reportParticipants = _.without(lodashGet(this.props.report, 'participants', []), this.props.currentUserPersonalDetails.login);
+        const reportParticipants = _.without(lodashGet(this.props, 'participants', []), this.props.currentUserPersonalDetails.login);
         const participantsWithoutExpensifyEmails = _.difference(reportParticipants, CONST.EXPENSIFY_EMAILS);
         const reportRecipient = this.props.personalDetails[participantsWithoutExpensifyEmails[0]];
 
-        const shouldShowReportRecipientLocalTime = ReportUtils.canShowReportRecipientLocalTime(this.props.personalDetails, this.props.report)
+        const shouldShowReportRecipientLocalTime = ReportUtils.canShowReportRecipientLocalTime(this.props.personalDetails, {chatType: this.props.chatType})
             && !this.props.isComposerFullSize;
 
         // Prevents focusing and showing the keyboard while the drawer is covering the chat.
         const isComposeDisabled = this.props.isDrawerOpen && this.props.isSmallScreenWidth;
-        const isBlockedFromConcierge = ReportUtils.chatIncludesConcierge(this.props.report) && User.isBlockedFromConcierge(this.props.blockedFromConcierge);
+        const isBlockedFromConcierge = ReportUtils.chatIncludesConcierge({participants: this.props.participants}) && User.isBlockedFromConcierge(this.props.blockedFromConcierge);
         const inputPlaceholder = this.getInputPlaceholder();
         const hasExceededMaxCommentLength = this.comment.length > CONST.MAX_COMMENT_LENGTH;
+        let maxLines = this.props.isSmallScreenWidth ? CONST.COMPOSER.MAX_LINES_SMALL_SCREEN : CONST.COMPOSER.MAX_LINES;
+        if (this.props.isComposerFullSize) {
+            maxLines = CONST.COMPOSER.MAX_LINES_FULL;
+        }
 
         return (
             <View style={[
@@ -628,12 +625,10 @@ class ReportActionCompose extends React.Component {
                                         }}
                                         style={[styles.textInputCompose, this.props.isComposerFullSize ? styles.textInputFullCompose : styles.flex4]}
                                         defaultValue={this.props.comment}
-                                        maxLines={this.state.maxLines}
+                                        maxLines={maxLines}
                                         onFocus={() => this.setIsFocused(true)}
                                         onBlur={() => this.setIsFocused(false)}
                                         onPasteFile={displayFileInModal}
-                                        shouldClear={this.state.textInputShouldClear}
-                                        onClear={() => this.setTextInputShouldClear(false)}
                                         isDisabled={isComposeDisabled || isBlockedFromConcierge}
                                         selection={this.state.selection}
                                         onSelectionChange={this.onSelectionChange}
@@ -699,6 +694,10 @@ export default compose(
     withOnyx({
         betas: {
             key: ONYXKEYS.BETAS,
+        },
+        reportActions: {
+            key: ({reportID}) => `${ONYXKEYS.COLLECTION.REPORT_ACTIONS}${reportID}`,
+            canEvict: false,
         },
         comment: {
             key: ({reportID}) => `${ONYXKEYS.COLLECTION.REPORT_DRAFT_COMMENT}${reportID}`,
