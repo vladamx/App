@@ -454,7 +454,7 @@ class ReportActionCompose extends PureComponent {
             return;
         }
 
-        // Prioritize reset of composer to make sure we properly clear the view
+        // Prioritize reset of composer to make sure we clear the view as soon as possible
         // Read https://reactnative.dev/docs/timers
         setImmediate(() => {
             this.prepareCommentAndResetComposer();
