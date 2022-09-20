@@ -16,7 +16,7 @@ import CONST from '../../../CONST';
 import ONYXKEYS from '../../../ONYXKEYS';
 import compose from '../../../libs/compose';
 import withWindowDimensions, {windowDimensionsPropTypes} from '../../../components/withWindowDimensions';
-import {withDrawerPropTypes} from '../../../components/withDrawerState';
+import withDrawerState, {withDrawerPropTypes} from '../../../components/withDrawerState';
 import * as ReportScrollManager from '../../../libs/ReportScrollManager';
 import withLocalize, {withLocalizePropTypes} from '../../../components/withLocalize';
 import ReportActionComposeFocusManager from '../../../libs/ReportActionComposeFocusManager';
@@ -383,6 +383,7 @@ ReportActionsView.defaultProps = defaultProps;
 
 export default compose(
     Performance.withRenderTrace({id: '<ReportActionsView> rendering'}),
+    withDrawerState,
     withWindowDimensions,
     withLocalize,
     withNetwork(),
