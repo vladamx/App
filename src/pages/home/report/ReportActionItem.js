@@ -192,9 +192,9 @@ class ReportActionItem extends Component {
             >
                 <Hoverable resetsOnClickOutside>
                     {hovered => (
-                        <View>
+                        <View accessibilityLabel="Chat message">
                             {this.props.shouldDisplayNewIndicator && (
-                                <UnreadActionIndicator />
+                                <UnreadActionIndicator sequenceNumber={this.props.action.sequenceNumber} />
                             )}
                             <View
                                 style={StyleUtils.getReportActionItemStyle(
